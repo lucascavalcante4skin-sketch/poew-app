@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>poew — Painel de Faturamento</title>
+<title>Analítico por Unidade Médica e Procedimento</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css">
 <style>
   body { margin: 0; background: #e8e8e8; padding: 18px; }
@@ -93,7 +93,7 @@
   const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuemtpYWphenlnZHpqZmZ4ZmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDg4MTgsImV4cCI6MjA5Mjg4NDgxOH0.ij0-Vj1iWbp8sUJJ1_0UiFrAIegM0zf1u4M4sT6FVWk";
   const DOMINIO = "@skinlaser.com.br";
   const sb = supabase.createClient(SUPA_URL, SUPA_ANON);
-  const { useState } = React;
+  const { useState, useEffect } = React;
   const html = htm.bind(React.createElement);
 
   const brl = v => "R$ " + v.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -102,6 +102,18 @@
   const MLBL = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
   const fmtD = s => { const p = s.split("-").map(Number); const dt = new Date(p[0],p[1]-1,p[2]); const wd = ["dom","seg","ter","qua","qui","sex","sáb"][dt.getDay()]; return wd+" "+String(p[2]).padStart(2,"0")+"/"+String(p[1]).padStart(2,"0"); };
   const monthLbl = ym => { const [y,m] = ym.split("-"); return MLBL[+m-1]+"/"+y.slice(2); };
+  const periodDays = (pmode, months, de, ate, calMin, calMax) => {
+    const out = [];
+    const push = (f0, t0) => {
+      let f = f0 < calMin ? calMin : f0, t = t0 > calMax ? calMax : t0;
+      if(f > t) return;
+      let d = new Date(f+"T00:00:00"); const end = new Date(t+"T00:00:00");
+      while(d <= end){ out.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")); d.setDate(d.getDate()+1); }
+    };
+    if(pmode === "mes"){ months.forEach(ym => { const [y,m] = ym.split("-").map(Number); const last = new Date(y, m, 0).getDate(); push(ym+"-01", ym+"-"+String(last).padStart(2,"0")); }); }
+    else { push(de, ate); }
+    return out;
+  };
 
   async function fetchAll(view){
     const out = []; let from = 0; const size = 1000;
@@ -129,7 +141,9 @@
     const dg = {}; gRows.forEach(r => { const k = r.grupo || "(sem grupo)"; (dg[k] = dg[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
     const dates = du.map(r => r[1]).sort();
     const months = [...new Set(dates.map(d => d.slice(0,7)))].sort().map(ym => [ym, monthLbl(ym)]);
-    return { units, du, dm, dg, dmin: dates[0]||"", dmax: dates[dates.length-1]||"", months };
+    const dmin = dates[0]||"", dmax = dates[dates.length-1]||"";
+    const calMin = (dmin ? dmin.slice(0,4) : "2026") + "-01-01";
+    return { units, du, dm, dg, dmin, dmax, calMin, calMax: dmax, months };
   }
 
   function buildPred(uni, pmode, months, de, ate){
@@ -176,13 +190,14 @@
     </div>`;
   }
   function Card({ icon, label, value }){ return html`<div class="kpi"><div class="val">${value}</div><div class="lbl"><i class=${"ti "+icon}></i>${label}</div></div>`; }
-  function Kpis({ daily }){
-    const vf = daily.reduce((s,r)=>s+r[1],0), qtd = daily.reduce((s,r)=>s+r[2],0), dias = daily.length||1;
+  function Kpis({ kpi }){
+    if(!kpi) return html`<div class="kpis"><div class="kpi"><div class="lbl">Carregando KPIs…</div></div></div>`;
+    const media = kpi.dias ? kpi.vf/kpi.dias : 0, ticket = kpi.qtd ? kpi.valor/kpi.qtd : 0;
     return html`<div class="kpis">
-      <${Card} icon="ti-cash" label="Valor Final" value=${brl0(vf)} />
-      <${Card} icon="ti-receipt" label="Ticket Médio" value=${brl0(qtd?vf/qtd:0)} />
-      <${Card} icon="ti-file-invoice" label="Qtd Propostas" value=${qtd.toLocaleString("pt-BR")} />
-      <${Card} icon="ti-calendar-stats" label="Média Diária" value=${brl0(vf/dias)} />
+      <${Card} icon="ti-cash" label="Valor Final" value=${brl0(kpi.vf)} />
+      <${Card} icon="ti-receipt" label="Ticket Médio" value=${brl0(ticket)} />
+      <${Card} icon="ti-file-invoice" label="Qtd Propostas" value=${kpi.qtd.toLocaleString("pt-BR")} />
+      <${Card} icon="ti-calendar-stats" label="Média Diária" value=${brl0(media)} />
     </div>`;
   }
   function Matrix({ title, entities, nameHead }){
@@ -269,20 +284,32 @@
     const [months, setMonths] = useState(store.months.map(m => m[0]));
     const [de, setDe] = useState(store.dmin);
     const [ate, setAte] = useState(store.dmax);
+    const [kpi, setKpi] = useState(null);
     const pred = buildPred(uni, pmode, months, de, ate);
     const daily = aggDaily(store, pred);
     const med = aggEntity(store.dm, pred);
     const grp = aggEntity(store.dg, pred);
     const ini = (user.isMaster ? "M" : (user.unidade||"U")).replace("Skinlaser - ","").charAt(0).toUpperCase();
+    useEffect(() => {
+      let cancel = false; setKpi(null);
+      const dias = periodDays(pmode, months, de, ate, store.calMin, store.calMax);
+      const p_unidade = user.isMaster ? (uni !== "" ? store.units[Number(uni)] : null) : user.unidade;
+      sb.rpc("analitico_kpis", { p_unidade, p_dias: dias }).then(({ data, error }) => {
+        if(cancel) return;
+        const r = (!error && data && data[0]) ? data[0] : { valor_final:0, valor:0, qtd:0 };
+        setKpi({ vf: Number(r.valor_final), valor: Number(r.valor), qtd: Number(r.qtd), dias: dias.length });
+      });
+      return () => { cancel = true; };
+    }, [uni, pmode, months.join(","), de, ate]);
     return html`<div>
       <div class="hdr">
-        <div class="hdr-l"><div class="sq"><i class="ti ti-chart-histogram"></i></div><b>poew — Faturamento</b></div>
+        <div class="hdr-l"><div class="sq"><i class="ti ti-chart-histogram"></i></div><b>Analítico por Unidade Médica e Procedimento</b></div>
         <div class="hdr-r"><span class="chip"><span class="av">${ini}</span>${user.isMaster ? "master" : user.login}</span><button class="lo" onClick=${onLogout} aria-label="Sair"><i class="ti ti-logout"></i></button></div>
       </div>
       <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
       <div class="canvas">
         ${page==="geral" ? html`<${React.Fragment}>
-          <${Kpis} daily=${daily} />
+          <${Kpis} kpi=${kpi} />
           <div class="visuals">
             <${Matrix} title="Por profissional" entities=${med} nameHead="Profissional" />
             <${Matrix} title="Por grupo de procedimento" entities=${grp} nameHead="Grupo" />
@@ -303,8 +330,8 @@
     const [u, setU] = useState(""); const [p, setP] = useState("");
     const go = () => { if(!busy && u.trim() && p) onLogin(u, p); };
     return html`<div class="gate"><div class="gate-card">
-      <div class="brand"><div class="logo"><i class="ti ti-chart-histogram"></i></div><h3>poew</h3></div>
-      <p class="gate-sub">Painel de Faturamento · Skinlaser</p>
+      <div class="brand"><div class="logo"><i class="ti ti-chart-histogram"></i></div><h3 style="font-size:16px;line-height:1.25">Analítico por Unidade Médica e Procedimento</h3></div>
+      <p class="gate-sub">Skinlaser</p>
       <label>Login</label>
       <input type="text" value=${u} onChange=${e => setU(e.target.value)} onKeyDown=${e => e.key==="Enter" && go()} placeholder="ex.: morumbi" />
       <label>Senha</label>
