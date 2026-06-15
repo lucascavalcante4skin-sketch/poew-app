@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>poew — Painel de Faturamento</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css">
+<style>
+  body { margin: 0; background: #e8e8e8; padding: 18px; }
+  .pbx { font-family: "Segoe UI", system-ui, sans-serif; color: #252423; background: #f3f2f1; border: 1px solid #d2d0ce; border-radius: 8px; overflow: hidden; max-width: 1160px; margin: 0 auto; }
+  .pbx * { box-sizing: border-box; }
+  .pbx .gate { min-height: 480px; display: flex; align-items: center; justify-content: center; background: #faf9f8; }
+  .pbx .gate-card { width: 330px; background: #fff; border: 1px solid #e1dfdd; border-radius: 10px; padding: 30px 28px; }
+  .pbx .brand { display: flex; align-items: center; gap: 10px; }
+  .pbx .brand .logo { width: 38px; height: 38px; border-radius: 9px; background: #118DFF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .pbx .brand h3 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: .5px; color: #252423; }
+  .pbx .gate-sub { color: #605e5c; font-size: 13px; margin: 4px 0 16px 2px; }
+  .pbx label { display: block; font-size: 12px; color: #605e5c; margin: 12px 0 4px; }
+  .pbx input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #c8c6c4; border-radius: 6px; font-size: 14px; background: #fff; color: #252423; }
+  .pbx input:focus { outline: none; border-color: #118DFF; box-shadow: 0 0 0 1px #118DFF; }
+  .pbx .btn { width: 100%; height: 40px; margin-top: 18px; background: #118DFF; color: #fff; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .pbx .btn:disabled { opacity: .6; cursor: default; }
+  .pbx .err { color: #a4262c; font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+  .pbx .hint { margin-top: 16px; font-size: 12px; color: #8a8886; text-align: center; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+  .pbx .hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #fff; border-bottom: 1px solid #e1dfdd; }
+  .pbx .hdr-l { display: flex; align-items: center; gap: 10px; }
+  .pbx .hdr-l .sq { width: 26px; height: 26px; border-radius: 6px; background: #118DFF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .pbx .hdr-l b { font-size: 15px; font-weight: 500; }
+  .pbx .hdr-r { display: flex; align-items: center; gap: 8px; }
+  .pbx .chip { display: inline-flex; align-items: center; gap: 6px; background: #f3f2f1; border: 1px solid #e1dfdd; border-radius: 20px; padding: 4px 10px; font-size: 13px; }
+  .pbx .chip .av { width: 20px; height: 20px; border-radius: 50%; background: #118DFF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; }
+  .pbx .lo { background: none; border: 0; color: #605e5c; cursor: pointer; font-size: 17px; padding: 4px; }
+  .pbx .fbar { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding: 10px 16px; background: #fbfbfa; border-bottom: 1px solid #e1dfdd; }
+  .pbx .fld { display: flex; flex-direction: column; gap: 3px; }
+  .pbx .fld > span { font-size: 11px; color: #8a8886; }
+  .pbx select.uni, .pbx input.dt { height: 32px; border: 1px solid #c8c6c4; border-radius: 6px; font-size: 13px; padding: 0 8px; background: #fff; color: #252423; font-family: inherit; width: auto; }
+  .pbx .lock { height: 32px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #252423; padding: 0 4px; }
+  .pbx .daterange { display: flex; align-items: center; gap: 6px; }
+  .pbx .daterange small { color: #8a8886; }
+  .pbx .canvas { padding: 14px 16px; }
+  .pbx .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 10px; margin-bottom: 14px; }
+  .pbx .kpi { background: #fff; border: 1px solid #e1dfdd; border-radius: 6px; padding: 11px 13px; }
+  .pbx .kpi .val { font-size: 22px; font-weight: 600; color: #252423; font-variant-numeric: tabular-nums; }
+  .pbx .kpi .lbl { font-size: 12px; color: #605e5c; margin-top: 3px; display: flex; align-items: center; gap: 5px; }
+  .pbx .kpi .lbl i { color: #118DFF; font-size: 14px; }
+  .pbx .visuals { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px,1fr)); gap: 14px; }
+  .pbx .visual { background: #fff; border: 1px solid #e1dfdd; border-radius: 6px; overflow: hidden; }
+  .pbx .visual-h { font-size: 13.5px; font-weight: 500; color: #323130; padding: 11px 14px 8px; }
+  .pbx .visual-h small { color: #8a8886; font-weight: 400; }
+  .pbx table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .pbx thead th { text-align: left; font-size: 11px; color: #8a8886; font-weight: 500; padding: 6px 12px; border-bottom: 1px solid #e1dfdd; }
+  .pbx thead th.num { text-align: right; }
+  .pbx tbody td { padding: 0 12px; height: 29px; border-bottom: 1px solid #f5f3f1; }
+  .pbx tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pbx .barcell { position: relative; }
+  .pbx .bar { position: absolute; left: 0; top: 4px; bottom: 4px; background: rgba(17,141,255,.22); border-radius: 1px; }
+  .pbx .barcell span { position: relative; }
+  .pbx .pct { color: #118DFF; font-weight: 500; }
+  .pbx .total td { border-top: 1px solid #c8c6c4; border-bottom: 0; font-weight: 600; background: #faf9f8; height: 32px; }
+  .pbx tr.grp { cursor: pointer; }
+  .pbx tr.grp td { font-weight: 500; border-top: 1px solid #ebe9e7; }
+  .pbx tr.grp td i { color: #8a8886; font-size: 13px; margin-right: 5px; }
+  .pbx tr.grp:hover td { background: #f8f7f6; }
+  .pbx td.ind { padding-left: 30px; color: #605e5c; }
+  .pbx tr.day td { color: #605e5c; height: 27px; }
+  .pbx .daily { margin-top: 14px; background: #fff; border: 1px solid #e1dfdd; border-radius: 6px; overflow: hidden; }
+  .pbx .daily-h { padding: 11px 14px 9px; font-size: 13.5px; font-weight: 500; color: #323130; }
+  .pbx .daily-h small { color: #8a8886; font-weight: 400; }
+  .pbx .subh { font-size: 12px; font-weight: 500; color: #605e5c; padding: 9px 14px 3px; border-top: 1px solid #f0eeec; }
+  .pbx .subh small { font-weight: 400; color: #a19f9d; }
+  .pbx .mchip { font-size: 12px; padding: 5px 11px; border: 1px solid #c8c6c4; border-radius: 16px; cursor: pointer; color: #605e5c; background: #fff; }
+  .pbx .mchip.on { background: #eaf3ff; border-color: #118DFF; color: #0f6cbd; font-weight: 500; }
+  .pbx .months { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pbx .seg { display: flex; border: 1px solid #d2d0ce; border-radius: 6px; overflow: hidden; height: 32px; }
+  .pbx .seg button { border: 0; background: #fff; color: #605e5c; font-size: 12.5px; padding: 0 13px; cursor: pointer; border-right: 1px solid #e1dfdd; font-family: inherit; }
+  .pbx .seg button:last-child { border-right: 0; }
+  .pbx .seg button.on { background: #118DFF; color: #fff; font-weight: 500; }
+  .pbx .tabs { display: flex; gap: 4px; padding: 7px 12px; background: #fff; border-top: 1px solid #e1dfdd; }
+  .pbx .tab { font-size: 12px; color: #605e5c; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
+  .pbx .tab.active { background: #eaf3ff; color: #0f6cbd; font-weight: 500; }
+  .pbx .loading { padding: 60px 16px; text-align: center; color: #605e5c; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="pbx" id="pbx-root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPA_URL = "https://bnzkiajazygdzjffxfef.supabase.co";
+  const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuemtpYWphenlnZHpqZmZ4ZmVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMDg4MTgsImV4cCI6MjA5Mjg4NDgxOH0.ij0-Vj1iWbp8sUJJ1_0UiFrAIegM0zf1u4M4sT6FVWk";
+  const DOMINIO = "@skinlaser.com.br";
+  const sb = supabase.createClient(SUPA_URL, SUPA_ANON);
+  const { useState } = React;
+  const html = htm.bind(React.createElement);
+
+  const brl = v => "R$ " + v.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const brl0 = v => "R$ " + Math.round(v).toLocaleString("pt-BR");
+  const pct = p => p.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1}) + "%";
+  const MLBL = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const fmtD = s => { const p = s.split("-").map(Number); const dt = new Date(p[0],p[1]-1,p[2]); const wd = ["dom","seg","ter","qua","qui","sex","sáb"][dt.getDay()]; return wd+" "+String(p[2]).padStart(2,"0")+"/"+String(p[1]).padStart(2,"0"); };
+  const monthLbl = ym => { const [y,m] = ym.split("-"); return MLBL[+m-1]+"/"+y.slice(2); };
+
+  async function fetchAll(view){
+    const out = []; let from = 0; const size = 1000;
+    while(true){
+      const { data, error } = await sb.from(view).select("*").range(from, from+size-1);
+      if(error) throw error;
+      out.push(...data);
+      if(data.length < size) break;
+      from += size;
+    }
+    return out;
+  }
+  async function loadStore(user){
+    const [dia, prof, grupo] = await Promise.all([fetchAll("vw_dia"), fetchAll("vw_prof_dia"), fetchAll("vw_grupo_dia")]);
+    let dRows = dia, pRows = prof, gRows = grupo;
+    if(!user.isMaster){
+      dRows = dRows.filter(r => r.unidade_nome === user.unidade);
+      pRows = pRows.filter(r => r.unidade_nome === user.unidade);
+      gRows = gRows.filter(r => r.unidade_nome === user.unidade);
+    }
+    const units = [...new Set(dRows.map(r => r.unidade_nome))].sort();
+    const uidx = {}; units.forEach((u,i) => uidx[u] = i);
+    const du = dRows.map(r => [uidx[r.unidade_nome], r.dia, Number(r.valor), Number(r.qtd)]);
+    const dm = {}; pRows.forEach(r => { const k = r.profissional; (dm[k] = dm[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
+    const dg = {}; gRows.forEach(r => { const k = r.grupo || "(sem grupo)"; (dg[k] = dg[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
+    const dates = du.map(r => r[1]).sort();
+    const months = [...new Set(dates.map(d => d.slice(0,7)))].sort().map(ym => [ym, monthLbl(ym)]);
+    return { units, du, dm, dg, dmin: dates[0]||"", dmax: dates[dates.length-1]||"", months };
+  }
+
+  function buildPred(uni, pmode, months, de, ate){
+    return (u, d) => {
+      if(uni !== "" && u !== Number(uni)) return false;
+      if(pmode === "mes") return months.includes(d.slice(0,7));
+      return d >= de && d <= ate;
+    };
+  }
+  function aggDaily(store, pred){
+    const m = {}, q = {};
+    store.du.forEach(([u,d,vf,qt]) => { if(pred(u,d)){ m[d]=(m[d]||0)+vf; q[d]=(q[d]||0)+qt; } });
+    return Object.keys(m).sort().reverse().map(d => [d, m[d], q[d]]);
+  }
+  function aggEntity(data, pred){
+    return Object.entries(data).map(([name, arr]) => {
+      const days = {};
+      arr.forEach(([u,d,vf]) => { if(pred(u,d)) days[d]=(days[d]||0)+vf; });
+      const dl = Object.keys(days).sort().reverse().map(d => [d, days[d]]);
+      return { name, days: dl, total: dl.reduce((s,r) => s+r[1], 0) };
+    }).filter(e => e.total > 0).sort((a,b) => b.total - a.total);
+  }
+
+  function FilterBar({ store, user, uni, setUni, pmode, setPmode, months, setMonths, de, setDe, ate, setAte }){
+    const toggleM = m => setMonths(s => s.includes(m) ? s.filter(x => x !== m) : s.concat(m));
+    return html`<div class="fbar">
+      <div class="fld"><span>Unidade</span>
+        ${user.isMaster
+          ? html`<select class="uni" value=${uni} onChange=${e => setUni(e.target.value)}>
+              <option value="">Todas as unidades</option>
+              ${store.units.map((u,i) => html`<option key=${i} value=${i}>${u}</option>`)}
+            </select>`
+          : html`<div class="lock"><i class="ti ti-lock"></i>${user.unidade}</div>`}
+      </div>
+      <div class="fld"><span>Período</span>
+        <div class="seg">
+          <button class=${pmode==="mes"?"on":""} onClick=${() => setPmode("mes")}>Mês</button>
+          <button class=${pmode==="custom"?"on":""} onClick=${() => setPmode("custom")}>Personalizado</button>
+        </div>
+      </div>
+      ${pmode==="mes"
+        ? html`<div class="fld"><span>Meses</span><div class="months">${store.months.map(m => html`<div key=${m[0]} class=${"mchip"+(months.includes(m[0])?" on":"")} onClick=${() => toggleM(m[0])}>${m[1]}</div>`)}</div></div>`
+        : html`<div class="fld"><span>Intervalo (por dia)</span><div class="daterange"><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${de} onChange=${e => setDe(e.target.value)} /><small>até</small><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${ate} onChange=${e => setAte(e.target.value)} /></div></div>`}
+    </div>`;
+  }
+  function Card({ icon, label, value }){ return html`<div class="kpi"><div class="val">${value}</div><div class="lbl"><i class=${"ti "+icon}></i>${label}</div></div>`; }
+  function Kpis({ daily }){
+    const vf = daily.reduce((s,r)=>s+r[1],0), qtd = daily.reduce((s,r)=>s+r[2],0), dias = daily.length||1;
+    return html`<div class="kpis">
+      <${Card} icon="ti-cash" label="Valor Final" value=${brl0(vf)} />
+      <${Card} icon="ti-receipt" label="Ticket Médio" value=${brl0(qtd?vf/qtd:0)} />
+      <${Card} icon="ti-file-invoice" label="Qtd Propostas" value=${qtd.toLocaleString("pt-BR")} />
+      <${Card} icon="ti-calendar-stats" label="Média Diária" value=${brl0(vf/dias)} />
+    </div>`;
+  }
+  function Matrix({ title, entities, nameHead }){
+    const grand = entities.reduce((s,e)=>s+e.total,0)||1, max = Math.max(1, ...entities.map(e=>e.total));
+    const maxShare = Math.max(0.0001, ...entities.map(e=>e.total/grand));
+    return html`<div class="visual">
+      <div class="visual-h">${title}</div>
+      <table>
+        <thead><tr><th>${nameHead}</th><th class="num">Valor Final</th><th class="num">% Fat. Médico</th></tr></thead>
+        <tbody>
+          ${entities.map(e => { const a=(e.total/grand/maxShare*0.28).toFixed(3); return html`<tr key=${e.name}>
+            <td>${e.name}</td>
+            <td class="num barcell"><div class="bar" style=${{width:(e.total/max*100)+"%"}}></div><span>${brl(e.total)}</span></td>
+            <td class="num" style=${{backgroundColor:"rgba(17,141,255,"+a+")"}}>${pct(e.total/grand*100)}</td>
+          </tr>`; })}
+          <tr class="total"><td>Total geral</td><td class="num">${brl(grand)}</td><td class="num">100,0%</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+  }
+  function TotalTable({ daily }){
+    const max = Math.max(1, ...daily.map(r=>r[1]));
+    const totVf = daily.reduce((a,r)=>a+r[1],0), totQ = daily.reduce((a,r)=>a+r[2],0);
+    return html`<div class="daily">
+      <div class="daily-h">Total <small>· ${daily.length} dia(s) · ${brl0(totVf)}</small></div>
+      <table>
+        <thead><tr><th>Dia</th><th class="num">Valor Final</th><th class="num">Qtd</th><th class="num">Ticket médio</th></tr></thead>
+        <tbody>
+          ${daily.map(r => html`<tr key=${r[0]}>
+            <td>${fmtD(r[0])}</td>
+            <td class="num barcell"><div class="bar" style=${{width:(r[1]/max*100)+"%"}}></div><span>${brl(r[1])}</span></td>
+            <td class="num">${r[2]}</td>
+            <td class="num">${brl0(r[2]?r[1]/r[2]:0)}</td>
+          </tr>`)}
+          <tr class="total"><td>Total</td><td class="num">${brl(totVf)}</td><td class="num">${totQ}</td><td class="num">${brl0(totQ?totVf/totQ:0)}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+  }
+  function DetailPage({ entities, nameHead, icon }){
+    const [open, setOpen] = useState({});
+    const grand = entities.reduce((s,e)=>s+e.total,0)||1, maxEnt = Math.max(1, ...entities.map(e=>e.total));
+    const dmap = {}; entities.forEach(e => e.days.forEach(([d,v]) => { dmap[d]=(dmap[d]||0)+v; }));
+    const daily = Object.keys(dmap).sort().reverse().map(d => [d, dmap[d]]);
+    const maxDay = Math.max(1, ...daily.map(d=>d[1]));
+    const toggle = n => setOpen(o => ({ ...o, [n]: !o[n] }));
+    return html`<div class="daily">
+      <div class="daily-h"><i class=${"ti "+icon} style=${{color:"#118DFF",marginRight:"6px"}}></i>${nameHead}s — detalhe por dia <small>· ${brl0(grand)}</small></div>
+      <div class="subh">Por dia</div>
+      <table>
+        <thead><tr><th>Dia</th><th class="num">Valor</th><th class="num">% Faturamento</th></tr></thead>
+        <tbody>
+          ${daily.map(d => html`<tr key=${d[0]}>
+            <td>${fmtD(d[0])}</td>
+            <td class="num barcell"><div class="bar" style=${{width:(d[1]/maxDay*100)+"%"}}></div><span>${brl(d[1])}</span></td>
+            <td class="num pct">${pct(d[1]/grand*100)}</td>
+          </tr>`)}
+          <tr class="total"><td>Total</td><td class="num">${brl(grand)}</td><td class="num">100,0%</td></tr>
+        </tbody>
+      </table>
+      <div class="subh">Por ${nameHead.toLowerCase()} e dia <small>(clique no nome para expandir)</small></div>
+      <table>
+        <thead><tr><th>${nameHead} / Dia</th><th class="num">Valor</th><th class="num">% Faturamento</th></tr></thead>
+        <tbody>
+          ${entities.map(e => html`<${React.Fragment} key=${e.name}>
+            <tr class="grp" onClick=${() => toggle(e.name)}>
+              <td><i class=${"ti "+(open[e.name]?"ti-chevron-down":"ti-chevron-right")}></i>${e.name}</td>
+              <td class="num barcell"><div class="bar" style=${{width:(e.total/maxEnt*100)+"%"}}></div><span>${brl(e.total)}</span></td>
+              <td class="num pct">${pct(e.total/grand*100)}</td>
+            </tr>
+            ${open[e.name] ? e.days.map(d => html`<tr class="day" key=${d[0]}>
+              <td class="ind">${fmtD(d[0])}</td><td class="num">${brl(d[1])}</td><td class="num">${pct(d[1]/grand*100)}</td>
+            </tr>`) : null}
+          </>`)}
+          <tr class="total"><td>Total geral</td><td class="num">${brl(grand)}</td><td class="num">100,0%</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+  }
+  function Dashboard({ user, store, onLogout }){
+    const [page, setPage] = useState("geral");
+    const [uni, setUni] = useState("");
+    const [pmode, setPmode] = useState("mes");
+    const [months, setMonths] = useState(store.months.map(m => m[0]));
+    const [de, setDe] = useState(store.dmin);
+    const [ate, setAte] = useState(store.dmax);
+    const pred = buildPred(uni, pmode, months, de, ate);
+    const daily = aggDaily(store, pred);
+    const med = aggEntity(store.dm, pred);
+    const grp = aggEntity(store.dg, pred);
+    const ini = (user.isMaster ? "M" : (user.unidade||"U")).replace("Skinlaser - ","").charAt(0).toUpperCase();
+    return html`<div>
+      <div class="hdr">
+        <div class="hdr-l"><div class="sq"><i class="ti ti-chart-histogram"></i></div><b>poew — Faturamento</b></div>
+        <div class="hdr-r"><span class="chip"><span class="av">${ini}</span>${user.isMaster ? "master" : user.login}</span><button class="lo" onClick=${onLogout} aria-label="Sair"><i class="ti ti-logout"></i></button></div>
+      </div>
+      <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
+      <div class="canvas">
+        ${page==="geral" ? html`<${React.Fragment}>
+          <${Kpis} daily=${daily} />
+          <div class="visuals">
+            <${Matrix} title="Por profissional" entities=${med} nameHead="Profissional" />
+            <${Matrix} title="Por grupo de procedimento" entities=${grp} nameHead="Grupo" />
+          </div>
+          <${TotalTable} daily=${daily} />
+        </>` : null}
+        ${page==="med" ? html`<${DetailPage} entities=${med} nameHead="Médico" icon="ti-stethoscope" />` : null}
+        ${page==="proc" ? html`<${DetailPage} entities=${grp} nameHead="Procedimento" icon="ti-clipboard-list" />` : null}
+      </div>
+      <div class="tabs">
+        <div class=${"tab"+(page==="geral"?" active":"")} onClick=${() => setPage("geral")}>Análise Geral</div>
+        <div class=${"tab"+(page==="med"?" active":"")} onClick=${() => setPage("med")}>Médicos - Detalhado</div>
+        <div class=${"tab"+(page==="proc"?" active":"")} onClick=${() => setPage("proc")}>Procedimentos - Detalhado</div>
+      </div>
+    </div>`;
+  }
+  function Login({ onLogin, err, busy }){
+    const [u, setU] = useState(""); const [p, setP] = useState("");
+    const go = () => { if(!busy && u.trim() && p) onLogin(u, p); };
+    return html`<div class="gate"><div class="gate-card">
+      <div class="brand"><div class="logo"><i class="ti ti-chart-histogram"></i></div><h3>poew</h3></div>
+      <p class="gate-sub">Painel de Faturamento · Skinlaser</p>
+      <label>Login</label>
+      <input type="text" value=${u} onChange=${e => setU(e.target.value)} onKeyDown=${e => e.key==="Enter" && go()} placeholder="ex.: morumbi" />
+      <label>Senha</label>
+      <input type="password" value=${p} onChange=${e => setP(e.target.value)} onKeyDown=${e => e.key==="Enter" && go()} placeholder="••••••" />
+      <button class="btn" onClick=${go} disabled=${busy}>${busy ? "Entrando..." : "Entrar"}</button>
+      <div class="err">${err}</div>
+      <div class="hint">Use o login da sua unidade (ou master)</div>
+    </div></div>`;
+  }
+  function App(){
+    const [user, setUser] = useState(null);
+    const [store, setStore] = useState(null);
+    const [err, setErr] = useState("");
+    const [busy, setBusy] = useState(false);
+    async function onLogin(login, pwd){
+      setBusy(true); setErr("");
+      try {
+        const lg = login.trim().toLowerCase();
+        const email = lg.includes("@") ? lg : lg + DOMINIO;
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+        if(error) throw new Error(error.message + "  [email: " + email + "]");
+        const { data: m } = await sb.from("app_user_unidade").select("unidade_nome,is_master").eq("user_id", data.user.id).maybeSingle();
+        if(!m) throw new Error("Usuário sem unidade vinculada (verifique o mapeamento).");
+        const u = { login: login.trim().toLowerCase(), unidade: m.unidade_nome, isMaster: !!m.is_master };
+        const s = await loadStore(u);
+        setUser(u); setStore(s);
+      } catch(e){ setErr(e.message || "Falha ao entrar."); }
+      finally { setBusy(false); }
+    }
+    function logout(){ sb.auth.signOut(); setUser(null); setStore(null); setErr(""); }
+    if(user && store) return html`<${Dashboard} user=${user} store=${store} onLogout=${logout} />`;
+    return html`<${Login} onLogin=${onLogin} err=${err} busy=${busy} />`;
+  }
+  ReactDOM.createRoot(document.getElementById("pbx-root")).render(html`<${App} />`);
+</script>
+</body>
+</html>
