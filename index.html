@@ -40,7 +40,8 @@
   .pbx .daterange { display: flex; align-items: center; gap: 7px; }
   .pbx .daterange small { color: #a59c8d; }
   .pbx .canvas { padding: 16px 18px; }
-  .pbx .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap: 12px; margin-bottom: 16px; }
+  .pbx .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(195px,1fr)); gap: 12px; margin-bottom: 16px; }
+  .pbx .kpi .ic { font-size: 22px; line-height: 1; }
   .pbx .kpi { background: #fff; border: 1px solid #eee6da; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 13px; box-shadow: 0 1px 3px rgba(80,50,10,.05); transition: transform .12s, box-shadow .12s; }
   .pbx .kpi:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(80,50,10,.09); }
   .pbx .kpi .ic { width: 42px; height: 42px; border-radius: 11px; background: var(--ac-soft); color: var(--ac); display: flex; align-items: center; justify-content: center; font-size: 21px; flex-shrink: 0; }
@@ -227,15 +228,15 @@
         : html`<div class="fld"><span>Intervalo (por dia)</span><div class="daterange"><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${de} onChange=${e => setDe(e.target.value)} /><small>até</small><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${ate} onChange=${e => setAte(e.target.value)} /></div></div>`}
     </div>`;
   }
-  function Card({ icon, label, value }){ return html`<div class="kpi"><div class="ic"><i class=${"ti "+icon}></i></div><div><div class="val">${value}</div><div class="lbl">${label}</div></div></div>`; }
+  function Card({ emoji, label, value }){ return html`<div class="kpi"><div class="ic">${emoji}</div><div><div class="val">${value}</div><div class="lbl">${label}</div></div></div>`; }
   function Kpis({ kpi }){
     if(!kpi) return html`<div class="kpis"><div class="kpi"><div class="ic"><i class="ti ti-loader"></i></div><div><div class="lbl">Carregando KPIs…</div></div></div></div>`;
     const media = kpi.dias ? kpi.vf/kpi.dias : 0, ticket = kpi.qtd ? kpi.valor/kpi.qtd : 0;
     return html`<div class="kpis">
-      <${Card} icon="ti-cash" label="Valor Final" value=${brl0(kpi.vf)} />
-      <${Card} icon="ti-receipt" label="Ticket Médio" value=${brl0(ticket)} />
-      <${Card} icon="ti-file-invoice" label="Qtd Propostas" value=${kpi.qtd.toLocaleString("pt-BR")} />
-      <${Card} icon="ti-calendar-stats" label="Média Diária" value=${brl0(media)} />
+      <${Card} emoji="💰" label="Valor Final" value=${brl0(kpi.vf)} />
+      <${Card} emoji="🧾" label="Ticket Médio" value=${brl0(ticket)} />
+      <${Card} emoji="📋" label="Quantidade de Propostas" value=${kpi.qtd.toLocaleString("pt-BR")} />
+      <${Card} emoji="📅" label="Média Diária" value=${brl0(media)} />
     </div>`;
   }
   function Matrix({ title, icon, entities, nameHead }){
