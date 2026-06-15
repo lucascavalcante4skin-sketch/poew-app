@@ -85,6 +85,21 @@
   .pbx .tab:hover { background: #faf7f2; }
   .pbx .tab.active { background: var(--ac-tint); color: var(--ac-text); font-weight: 500; }
   .pbx .chartbox { position: relative; padding: 4px 12px 14px; }
+  .pbx .body { display: flex; align-items: stretch; }
+  .pbx .side { width: 234px; flex-shrink: 0; background: #fff; border-right: 1px solid #eee6da; padding: 14px 12px; }
+  .pbx .side-t { font-size: 11px; font-weight: 600; color: #b8ad9c; text-transform: uppercase; letter-spacing: .5px; padding: 4px 12px 9px; }
+  .pbx .nav { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 10px; font-size: 13.5px; color: #6e675c; cursor: pointer; transition: background .12s, color .12s; margin-bottom: 3px; }
+  .pbx .nav i { font-size: 19px; color: #b8ad9c; }
+  .pbx .nav:hover { background: #faf7f2; }
+  .pbx .nav.active { background: var(--ac-tint); color: var(--ac-text); font-weight: 500; }
+  .pbx .nav.active i { color: var(--ac); }
+  .pbx .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  @media (max-width: 760px) {
+    .pbx .body { flex-direction: column; }
+    .pbx .side { width: auto; display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid #eee6da; padding: 8px 10px; }
+    .pbx .side-t { display: none; }
+    .pbx .nav { white-space: nowrap; margin-bottom: 0; }
+  }
   @media (max-width: 560px) {
     body { padding: 8px; }
     .pbx .hdr-l b { font-size: 12.5px; white-space: normal; }
@@ -353,8 +368,16 @@
         <div class="hdr-l"><img class="logo" src="logo.png" alt="Skin Laser" /><b>Analítico por Unidade Médica e Procedimento</b></div>
         <div class="hdr-r"><span class="chip"><span class="av">${ini}</span>${user.isMaster ? "diretoria" : user.login}</span><button class="lo" onClick=${onLogout} aria-label="Sair"><i class="ti ti-logout"></i></button></div>
       </div>
-      <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
-      <div class="canvas">
+      <div class="body">
+        <div class="side">
+          <div class="side-t">Páginas</div>
+          <div class=${"nav"+(page==="geral"?" active":"")} onClick=${() => setPage("geral")}><i class="ti ti-layout-dashboard"></i>Análise Geral</div>
+          <div class=${"nav"+(page==="med"?" active":"")} onClick=${() => setPage("med")}><i class="ti ti-stethoscope"></i>Médicos - Detalhado</div>
+          <div class=${"nav"+(page==="proc"?" active":"")} onClick=${() => setPage("proc")}><i class="ti ti-clipboard-list"></i>Procedimentos - Detalhado</div>
+        </div>
+        <div class="main">
+          <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
+          <div class="canvas">
         ${page==="geral" ? html`<${React.Fragment}>
           <${Kpis} kpi=${kpi} />
           <div class="visual">
@@ -369,11 +392,8 @@
         </>` : null}
         ${page==="med" ? html`<${DetailPage} entities=${med} nameHead="Médico" icon="ti-stethoscope" />` : null}
         ${page==="proc" ? html`<${DetailPage} entities=${grp} nameHead="Procedimento" icon="ti-clipboard-list" />` : null}
-      </div>
-      <div class="tabs">
-        <div class=${"tab"+(page==="geral"?" active":"")} onClick=${() => setPage("geral")}>Análise Geral</div>
-        <div class=${"tab"+(page==="med"?" active":"")} onClick=${() => setPage("med")}>Médicos - Detalhado</div>
-        <div class=${"tab"+(page==="proc"?" active":"")} onClick=${() => setPage("proc")}>Procedimentos - Detalhado</div>
+          </div>
+        </div>
       </div>
     </div>`;
   }
