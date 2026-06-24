@@ -36,7 +36,6 @@
   .pbx .fld { display: flex; flex-direction: column; gap: 4px; }
   .pbx .fld > span { font-size: 11px; color: #a59c8d; font-weight: 500; }
   .pbx select.uni, .pbx input.dt { height: 34px; border: 1px solid #d9d2c7; border-radius: 9px; font-size: 13px; padding: 0 10px; background: #fff; color: #2b2a28; font-family: inherit; width: auto; }
-  .pbx .mfin { width: 220px; height: 34px; border: 1px solid #d9d2c7; border-radius: 9px; font-size: 13px; padding: 0 10px; background: #fff; color: #2b2a28; }
   .pbx .lock { height: 34px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #4a443c; padding: 0 6px; }
   .pbx .daterange { display: flex; align-items: center; gap: 7px; }
   .pbx .daterange small { color: #a59c8d; }
@@ -157,25 +156,23 @@
     return out;
   }
   async function loadStore(user){
-    const [dia, prof, grupo, pacote] = await Promise.all([fetchAll("vw_dia"), fetchAll("vw_prof_dia"), fetchAll("vw_grupo_dia"), fetchAll("vw_pacote_dia").catch(() => [])]);
-    let dRows = dia, pRows = prof, gRows = grupo, kRows = pacote;
+    const [dia, prof, grupo] = await Promise.all([fetchAll("vw_dia"), fetchAll("vw_prof_dia"), fetchAll("vw_grupo_dia")]);
+    let dRows = dia, pRows = prof, gRows = grupo;
     if(!user.isMaster){
       dRows = dRows.filter(r => r.unidade_nome === user.unidade);
       pRows = pRows.filter(r => r.unidade_nome === user.unidade);
       gRows = gRows.filter(r => r.unidade_nome === user.unidade);
-      kRows = kRows.filter(r => r.unidade_nome === user.unidade);
     }
     const units = [...new Set(dRows.map(r => r.unidade_nome))].sort();
     const uidx = {}; units.forEach((u,i) => uidx[u] = i);
     const du = dRows.map(r => [uidx[r.unidade_nome], r.dia, Number(r.valor), Number(r.qtd)]);
     const dm = {}; pRows.forEach(r => { const k = r.profissional; (dm[k] = dm[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
     const dg = {}; gRows.forEach(r => { const k = r.grupo || "(sem grupo)"; (dg[k] = dg[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
-    const dp = {}; kRows.forEach(r => { const k = r.pacote || "(sem pacote)"; (dp[k] = dp[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
     const dates = du.map(r => r[1]).sort();
     const months = [...new Set(dates.map(d => d.slice(0,7)))].sort().map(ym => [ym, monthLbl(ym)]);
     const dmin = dates[0]||"", dmax = dates[dates.length-1]||"";
     const calMin = (dmin ? dmin.slice(0,4) : "2026") + "-01-01";
-    return { units, du, dm, dg, dp, dmin, dmax, calMin, calMax: dmax, months };
+    return { units, du, dm, dg, dmin, dmax, calMin, calMax: dmax, months };
   }
 
   function buildPred(uni, pmode, months, de, ate){
@@ -341,75 +338,6 @@
       </div>
     </>`;
   }
-  function PacotesPage({ user, store, uni, pmode, months, de, ate }){
-    const [data, setData] = useState(null);
-    const [fMed, setFMed] = useState("");
-    const [fProc, setFProc] = useState("");
-    const [fPac, setFPac] = useState("");
-    const [open, setOpen] = useState({});
-    useEffect(() => {
-      let cancel = false; setData(null);
-      Promise.all([fetchAll("vw_pacote_solic").catch(() => []), fetchAll("vw_med_proc").catch(() => [])])
-        .then(([ps, mp]) => { if(!cancel) setData({ ps, mp }); });
-      return () => { cancel = true; };
-    }, []);
-    if(!data) return html`<div class="visual"><div class="visual-h"><i class="ti ti-package"></i>Pacotes</div><div style=${{padding:"30px 16px",color:"#8a8378"}}>Carregando…</div></div>`;
-    const uniName = (user.isMaster && uni !== "") ? store.units[Number(uni)] : (user.isMaster ? null : user.unidade);
-    const inP = d => pmode === "mes" ? months.includes(d.slice(0,7)) : (d >= de && d <= ate);
-    const okUni = un => !uniName || un === uniName;
-    const terms = s => s.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
-    const matchAny = (val, ts) => ts.length === 0 || ts.some(t => (val||"").toLowerCase().includes(t));
-    const tMed = terms(fMed), tProc = terms(fProc), tPac = terms(fPac);
-    const psf = data.ps.filter(r => okUni(r.unidade_nome) && inP(r.dia) && matchAny(r.solicitante,tMed) && matchAny(r.procedimento,tProc) && matchAny(r.pacote,tPac));
-    const pacMap = {};
-    psf.forEach(r => { const p = pacMap[r.pacote] = pacMap[r.pacote] || { total:0, solic:{} }; const v = Number(r.valor); p.total += v; p.solic[r.solicitante] = (p.solic[r.solicitante]||0) + v; });
-    const pacotes = Object.entries(pacMap).map(([nome,v]) => ({ nome, total:v.total, solic: Object.entries(v.solic).sort((a,b)=>b[1]-a[1]) })).sort((a,b)=>b.total-a.total);
-    const grandPac = pacotes.reduce((s,p)=>s+p.total,0) || 1;
-    const maxPac = Math.max(1, ...pacotes.map(p=>p.total));
-    const mpf = data.mp.filter(r => okUni(r.unidade_nome) && inP(r.dia) && matchAny(r.medico,tMed) && matchAny(r.procedimento,tProc));
-    const mpMap = {};
-    mpf.forEach(r => { const k = r.medico+"||"+r.procedimento; const o = mpMap[k] = mpMap[k] || { medico:r.medico, proc:r.procedimento, valor:0, qtd:0 }; o.valor += Number(r.valor); o.qtd += Number(r.qtd); });
-    const medproc = Object.values(mpMap).sort((a,b)=>b.valor-a.valor);
-    const mpTotQ = medproc.reduce((s,o)=>s+o.qtd,0), mpTotV = medproc.reduce((s,o)=>s+o.valor,0);
-    const toggle = n => setOpen(o => ({ ...o, [n]: !o[n] }));
-    const field = (lbl, val, set, ph) => html`<div class="fld"><span>${lbl}</span><input class="mfin" value=${val} onChange=${e => set(e.target.value)} placeholder=${ph} /></div>`;
-    return html`<${React.Fragment}>
-      <div class="visual" style=${{padding:"12px 14px",display:"flex",gap:"16px",flexWrap:"wrap",alignItems:"flex-end"}}>
-        ${field("Médico (contém)", fMed, setFMed, "ex.: silvia, ana")}
-        ${field("Procedimento (contém)", fProc, setFProc, "ex.: laser, toxina")}
-        ${field("Pacote (contém)", fPac, setFPac, "ex.: promo")}
-        <div style=${{fontSize:"11px",color:"#a59c8d",paddingBottom:"7px"}}>separe por vírgula p/ vários termos</div>
-      </div>
-      <div class="visual">
-        <div class="visual-h"><i class="ti ti-package"></i>Pacotes — por solicitante <small>· ${pacotes.length} pacote(s) · ${brl0(grandPac)}</small></div>
-        <table>
-          <thead><tr><th>Pacote / Solicitante</th><th class="num">Valor</th><th class="num">%</th></tr></thead>
-          <tbody>
-            ${pacotes.map(p => html`<${React.Fragment} key=${p.nome}>
-              <tr class="grp" onClick=${() => toggle(p.nome)}>
-                <td><i class=${"ti "+(open[p.nome]?"ti-chevron-down":"ti-chevron-right")}></i>${p.nome}</td>
-                <td class="num barcell"><div class="bar" style=${{width:(p.total/maxPac*100)+"%"}}></div><span>${brl(p.total)}</span></td>
-                <td class="num pct">${pct(p.total/grandPac*100)}</td>
-              </tr>
-              ${open[p.nome] ? p.solic.map(([s,val]) => html`<tr class="day" key=${s}><td class="ind">${s}</td><td class="num">${brl(val)}</td><td class="num">${pct(val/grandPac*100)}</td></tr>`) : null}
-            </>`)}
-            <tr class="total"><td>Total geral</td><td class="num">${brl(grandPac)}</td><td class="num">100,0%</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="visual">
-        <div class="visual-h"><i class="ti ti-stethoscope"></i>Médico × Procedimento <small>· ${medproc.length} linha(s) · ${mpTotQ.toLocaleString("pt-BR")} procedimentos</small></div>
-        <table>
-          <thead><tr><th>Médico</th><th>Procedimento</th><th class="num">Quantidade</th><th class="num">Valor</th></tr></thead>
-          <tbody>
-            ${medproc.slice(0,200).map((o,i) => html`<tr key=${i}><td>${o.medico}</td><td>${o.proc}</td><td class="num">${o.qtd.toLocaleString("pt-BR")}</td><td class="num">${brl(o.valor)}</td></tr>`)}
-            <tr class="total"><td>Total</td><td></td><td class="num">${mpTotQ.toLocaleString("pt-BR")}</td><td class="num">${brl(mpTotV)}</td></tr>
-          </tbody>
-        </table>
-        ${medproc.length>200 ? html`<div style=${{padding:"6px 14px 12px",fontSize:"11px",color:"#a59c8d"}}>Mostrando 200 de ${medproc.length} — use os filtros acima pra refinar.</div>` : null}
-      </div>
-    </>`;
-  }
   function Dashboard({ user, store, onLogout }){
     const [page, setPage] = useState("geral");
     const [uni, setUni] = useState("");
@@ -422,7 +350,6 @@
     const daily = aggDaily(store, pred);
     const med = aggEntity(store.dm, pred);
     const grp = aggEntity(store.dg, pred);
-    const pac = aggEntity(store.dp || {}, pred);
     const ini = (user.isMaster ? "D" : (user.unidade||"U")).replace("Skinlaser - ","").charAt(0).toUpperCase();
     useEffect(() => {
       let cancel = false; setKpi(null);
@@ -447,7 +374,6 @@
           <div class=${"nav"+(page==="geral"?" active":"")} onClick=${() => setPage("geral")}><i class="ti ti-layout-dashboard"></i>Análise Geral</div>
           <div class=${"nav"+(page==="med"?" active":"")} onClick=${() => setPage("med")}><i class="ti ti-stethoscope"></i>Médicos - Detalhado</div>
           <div class=${"nav"+(page==="proc"?" active":"")} onClick=${() => setPage("proc")}><i class="ti ti-clipboard-list"></i>Procedimentos - Detalhado</div>
-          <div class=${"nav"+(page==="pac"?" active":"")} onClick=${() => setPage("pac")}><i class="ti ti-package"></i>Pacotes - Detalhado</div>
         </div>
         <div class="main">
           <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
@@ -455,7 +381,7 @@
         ${page==="geral" ? html`<${React.Fragment}>
           <${Kpis} kpi=${kpi} />
           <div class="visual">
-            <div class="visual-h"><i class="ti ti-chart-bar"></i>Produção por dia (Solicitado)</div>
+            <div class="visual-h"><i class="ti ti-chart-bar"></i>Faturamento por dia</div>
             <${Chartjs} labels=${dchart.map(r=>ddmm(r[0]))} data=${dchart.map(r=>r[1])} height=${230} />
           </div>
           <div class="grid2">
@@ -466,7 +392,6 @@
         </>` : null}
         ${page==="med" ? html`<${DetailPage} entities=${med} nameHead="Médico" icon="ti-stethoscope" />` : null}
         ${page==="proc" ? html`<${DetailPage} entities=${grp} nameHead="Procedimento" icon="ti-clipboard-list" />` : null}
-        ${page==="pac" ? html`<${PacotesPage} user=${user} store=${store} uni=${uni} pmode=${pmode} months=${months} de=${de} ate=${ate} />` : null}
           </div>
         </div>
       </div>
