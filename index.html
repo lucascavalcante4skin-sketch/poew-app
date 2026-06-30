@@ -32,10 +32,16 @@
   .pbx .chip .av { width: 24px; height: 24px; border-radius: 50%; background: var(--ac); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
   .pbx .lo { background: none; border: 0; color: #8a8378; cursor: pointer; font-size: 18px; padding: 5px; border-radius: 8px; transition: background .15s, color .15s; }
   .pbx .lo:hover { color: var(--ac); background: var(--ac-soft); }
+  .pbx .inbox-ico { display: inline-block; position: relative; width: 20px; height: 17px; vertical-align: middle; }
+  .pbx .inbox-ico::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 11px; border: 1.8px solid #E8830F; border-radius: 2px; }
+  .pbx .inbox-ico::after { content: ''; position: absolute; top: 0; left: 4px; right: 4px; height: 10px; border: 1.8px solid #E8830F; border-bottom: 0; border-radius: 2px 2px 0 0; background: #fff; }
+  @keyframes inbox-pulse { 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(232,131,15,0); } 50%{ transform:scale(1.13); box-shadow:0 0 0 5px rgba(232,131,15,.18); } }
+  .pbx .lo-pulse { animation: inbox-pulse 2.2s ease-in-out infinite; border-radius: 8px; }
   .pbx .fbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 12px 18px; background: #fcfbf9; border-bottom: 1px solid #eee6da; }
   .pbx .fld { display: flex; flex-direction: column; gap: 4px; }
   .pbx .fld > span { font-size: 11px; color: #a59c8d; font-weight: 500; }
   .pbx select.uni, .pbx input.dt { height: 34px; border: 1px solid #d9d2c7; border-radius: 9px; font-size: 13px; padding: 0 10px; background: #fff; color: #2b2a28; font-family: inherit; width: auto; }
+  .pbx .mfin { width: 220px; height: 34px; border: 1px solid #d9d2c7; border-radius: 9px; font-size: 13px; padding: 0 10px; background: #fff; color: #2b2a28; }
   .pbx .lock { height: 34px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: #4a443c; padding: 0 6px; }
   .pbx .daterange { display: flex; align-items: center; gap: 7px; }
   .pbx .daterange small { color: #a59c8d; }
@@ -156,31 +162,79 @@
     return out;
   }
   async function loadStore(user){
-    const [dia, prof, grupo] = await Promise.all([fetchAll("vw_dia"), fetchAll("vw_prof_dia"), fetchAll("vw_grupo_dia")]);
-    let dRows = dia, pRows = prof, gRows = grupo;
+    const [dia, prof, grupo, pacote, profproc] = await Promise.all([
+      fetchAll("vw_dia"), fetchAll("vw_prof_dia"), fetchAll("vw_grupo_dia"),
+      fetchAll("vw_pacote_dia").catch(() => []),
+      fetchAll("vw_prof_proc").catch(() => [])
+    ]);
+    let dRows = dia, pRows = prof, gRows = grupo, kRows = pacote, ppRows = profproc;
     if(!user.isMaster){
       dRows = dRows.filter(r => r.unidade_nome === user.unidade);
       pRows = pRows.filter(r => r.unidade_nome === user.unidade);
       gRows = gRows.filter(r => r.unidade_nome === user.unidade);
+      kRows = kRows.filter(r => r.unidade_nome === user.unidade);
+      ppRows = ppRows.filter(r => r.unidade_nome === user.unidade);
     }
     const units = [...new Set(dRows.map(r => r.unidade_nome))].sort();
     const uidx = {}; units.forEach((u,i) => uidx[u] = i);
     const du = dRows.map(r => [uidx[r.unidade_nome], r.dia, Number(r.valor), Number(r.qtd)]);
     const dm = {}; pRows.forEach(r => { const k = r.profissional; (dm[k] = dm[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
     const dg = {}; gRows.forEach(r => { const k = r.grupo || "(sem grupo)"; (dg[k] = dg[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
+    const dp = {}; kRows.forEach(r => { const k = r.pacote || "(sem pacote)"; (dp[k] = dp[k]||[]).push([uidx[r.unidade_nome], r.dia, Number(r.valor)]); });
+    const dmd = {}; ppRows.forEach(r => { const nom = r.medico||r.profissional; const k = nom+"||"+r.dia; (dmd[k] = dmd[k]||[]).push({ proc: r.procedimento, valor: Number(r.valor), un: uidx[r.unidade_nome] }); });
+    // dmp: médico → { proc → valor } (para cross-display sutil)
+    const dmp = {}; ppRows.forEach(r => { const nom = r.medico||r.profissional; if(!dmp[nom]) dmp[nom]={}; const p=r.procedimento; dmp[nom][p]=(dmp[nom][p]||0)+Number(r.valor); });
+    // dpm: procedimento → [médicos] (para cross-display em grupos – usa vw_prof_proc)
+    const dpg = {}; ppRows.forEach(r => { const nom = r.medico||r.profissional; const p=r.procedimento; (dpg[p]=dpg[p]||new Set()).add(nom); });
     const dates = du.map(r => r[1]).sort();
     const months = [...new Set(dates.map(d => d.slice(0,7)))].sort().map(ym => [ym, monthLbl(ym)]);
     const dmin = dates[0]||"", dmax = dates[dates.length-1]||"";
     const calMin = (dmin ? dmin.slice(0,4) : "2026") + "-01-01";
-    return { units, du, dm, dg, dmin, dmax, calMin, calMax: dmax, months };
+    return { units, du, dm, dg, dp, dmd, dmp, dpg, dmin, dmax, calMin, calMax: dmax, months };
   }
 
-  function buildPred(uni, pmode, months, de, ate){
+  function buildPred(unis, pmode, months, de, ate){
     return (u, d) => {
-      if(uni !== "" && u !== Number(uni)) return false;
+      if(unis.length > 0 && !unis.includes(u)) return false;
       if(pmode === "mes") return months.includes(d.slice(0,7));
       return d >= de && d <= ate;
     };
+  }
+  function MultiSelect({ options, value, onChange, placeholder, searchable }){
+    const [open, setOpen] = useState(false);
+    const [q, setQ] = useState("");
+    const ref = React.useRef(null);
+    useEffect(() => {
+      if(!open){ setQ(""); return; }
+      const h = e => { if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+      document.addEventListener("mousedown", h);
+      return () => document.removeEventListener("mousedown", h);
+    }, [open]);
+    const toggle = v => onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v]);
+    const filtered = searchable && q.trim() ? options.filter(([,lbl2]) => lbl2.toLowerCase().includes(q.trim().toLowerCase())) : options;
+    const allOn = value.length === options.length;
+    const lbl = value.length === 0 ? placeholder : allOn ? "Todas" : value.length + " selecionado(s)";
+    return html`<div style=${{position:"relative",display:"inline-block"}} ref=${ref}>
+      <button onClick=${() => setOpen(o => !o)} style=${{height:"34px",border:"1px solid #d9d2c7",borderRadius:"9px",fontSize:"13px",padding:"0 10px 0 12px",background:"#fff",color:value.length?"#2b2a28":"#a59c8d",fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",gap:"8px",minWidth:"180px",justifyContent:"space-between",whiteSpace:"nowrap"}}>
+        <span>${lbl}</span><i class=${"ti ti-chevron-"+(open?"up":"down")} style=${{fontSize:"12px",color:"#a59c8d",flexShrink:0}}></i>
+      </button>
+      ${open ? html`<div style=${{position:"absolute",top:"38px",left:"0",background:"#fff",border:"1px solid #e3ded7",borderRadius:"10px",boxShadow:"0 8px 24px rgba(80,50,10,.14)",zIndex:200,minWidth:"210px",maxHeight:"320px",display:"flex",flexDirection:"column",padding:"0"}}>
+        ${searchable ? html`<div style=${{padding:"8px 10px",borderBottom:"1px solid #f3eee6",flexShrink:0}}>
+          <input autoFocus value=${q} onChange=${e => setQ(e.target.value)} placeholder="Buscar procedimento…" style=${{width:"100%",height:"30px",border:"1px solid #d9d2c7",borderRadius:"7px",padding:"0 10px",fontSize:"12.5px",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} onClick=${e => e.stopPropagation()} />
+        </div>` : null}
+        <div style=${{overflowY:"auto",flex:1,padding:"4px 0"}}>
+          ${!q.trim() ? html`<label style=${{display:"flex",alignItems:"center",gap:"8px",padding:"7px 14px",cursor:"pointer",fontSize:"12.5px",color:"#6e675c",borderBottom:"1px solid #f3eee6",fontWeight:500}}>
+            <input type="checkbox" checked=${allOn} onChange=${() => onChange(allOn ? [] : options.map(o => o[0]))} style=${{accentColor:AC,cursor:"pointer",width:"14px",height:"14px"}} />
+            Todos
+          </label>` : null}
+          ${filtered.length === 0 ? html`<div style=${{padding:"10px 14px",fontSize:"12px",color:"#b8ad9c"}}>Nenhum resultado</div>` : null}
+          ${filtered.map(([v,lbl2]) => html`<label key=${v} style=${{display:"flex",alignItems:"center",gap:"8px",padding:"6px 14px",cursor:"pointer",fontSize:"12.5px",color:"#2b2a28"}}>
+            <input type="checkbox" checked=${value.includes(v)} onChange=${() => toggle(v)} style=${{accentColor:AC,cursor:"pointer",width:"14px",height:"14px"}} />
+            ${lbl2}
+          </label>`)}
+        </div>
+      </div>` : null}
+    </div>`;
   }
   function aggDaily(store, pred){
     const m = {}, q = {};
@@ -221,15 +275,13 @@
     return html`<div class="chartbox" style=${{ height: (height||230)+"px" }}><canvas ref=${ref}></canvas></div>`;
   }
 
-  function FilterBar({ store, user, uni, setUni, pmode, setPmode, months, setMonths, de, setDe, ate, setAte }){
+  function FilterBar({ store, user, unis, setUnis, pmode, setPmode, months, setMonths, de, setDe, ate, setAte, page, fMeds, setFMeds, medOpts, fProcs, setFProcs, procOpts }){
     const toggleM = m => setMonths(s => s.includes(m) ? s.filter(x => x !== m) : s.concat(m));
+    const uniOpts = store.units.map((u,i) => [i, u]);
     return html`<div class="fbar">
       <div class="fld"><span>Unidade</span>
         ${user.isMaster
-          ? html`<select class="uni" value=${uni} onChange=${e => setUni(e.target.value)}>
-              <option value="">Todas as unidades</option>
-              ${store.units.map((u,i) => html`<option key=${i} value=${i}>${u}</option>`)}
-            </select>`
+          ? html`<${MultiSelect} options=${uniOpts} value=${unis} onChange=${setUnis} placeholder="Todas as unidades" />`
           : html`<div class="lock"><i class="ti ti-lock"></i>${user.unidade}</div>`}
       </div>
       <div class="fld"><span>Período</span>
@@ -241,6 +293,8 @@
       ${pmode==="mes"
         ? html`<div class="fld"><span>Meses</span><div class="months">${store.months.map(m => html`<div key=${m[0]} class=${"mchip"+(months.includes(m[0])?" on":"")} onClick=${() => toggleM(m[0])}>${m[1]}</div>`)}</div></div>`
         : html`<div class="fld"><span>Intervalo (por dia)</span><div class="daterange"><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${de} onChange=${e => setDe(e.target.value)} /><small>até</small><input class="dt" type="date" min=${store.dmin} max=${store.dmax} value=${ate} onChange=${e => setAte(e.target.value)} /></div></div>`}
+      ${page==="proc" ? html`<div class="fld"><span>Médico</span><${MultiSelect} options=${medOpts} value=${fMeds} onChange=${setFMeds} placeholder="Todos os médicos" /></div>` : null}
+      ${page==="med" ? html`<div class="fld"><span>Procedimento</span><${MultiSelect} options=${procOpts} value=${fProcs} onChange=${setFProcs} placeholder="Todos os procedimentos" searchable=${true} /></div>` : null}
     </div>`;
   }
   function Card({ emoji, label, value }){ return html`<div class="kpi"><div class="ic">${emoji}</div><div><div class="val">${value}</div><div class="lbl">${label}</div></div></div>`; }
@@ -338,35 +392,265 @@
       </div>
     </>`;
   }
+  function ProcDetailPage({ entities, dmd, pred, fMeds, topMeds }){
+    let procEntities;
+    if(fMeds.length === 0){
+      procEntities = entities;
+    } else {
+      const procMap = {};
+      Object.entries(dmd).forEach(([key, procs]) => {
+        const [med, day] = key.split("||");
+        if(!fMeds.includes(med)) return;
+        procs.forEach(p => {
+          if(!pred(p.un, day)) return;
+          const pm = procMap[p.proc] = procMap[p.proc] || {};
+          pm[day] = (pm[day]||0) + p.valor;
+        });
+      });
+      procEntities = Object.entries(procMap).map(([name, days]) => ({
+        name,
+        days: Object.entries(days).sort((a,b) => b[0].localeCompare(a[0])).map(([d,v]) => [d,v]),
+        total: Object.values(days).reduce((s,v)=>s+v, 0)
+      })).filter(e=>e.total>0).sort((a,b)=>b.total-a.total);
+    }
+    const banner = (!fMeds.length && topMeds.length) ? html`<div style=${{padding:"8px 16px 6px",display:"flex",alignItems:"center",gap:"6px",flexWrap:"wrap",borderBottom:"1px solid #eee6da",background:"#fcfbf9"}}>
+      <span style=${{fontSize:"11px",color:"#b8ad9c",fontWeight:600,whiteSpace:"nowrap"}}>Médicos no período:</span>
+      ${topMeds.slice(0,6).map((e,i) => html`<span key=${i} style=${{fontSize:"11px",color:"#6e675c",padding:"2px 8px",background:"#f4f2ef",borderRadius:"10px",border:"1px solid #e3ded7"}}>${e.name}</span>`)}
+      ${topMeds.length>6 ? html`<span style=${{fontSize:"11px",color:"#b8ad9c"}}>+${topMeds.length-6} mais</span>` : null}
+    </div>` : null;
+    return html`<${React.Fragment}>${banner}<${DetailPage} entities=${procEntities} nameHead=${fMeds.length?"Procedimento":"Grupo"} icon="ti-clipboard-list" /></>`;
+  }
+  function MedicosDetailPage({ entities, dmd, unis, dmp, fProcs, periodOk }){
+    const [open, setOpen] = useState({});
+    const [openDay, setOpenDay] = useState({});
+    const displayEntities = fProcs.length === 0 ? entities : (() => {
+      const medMap = {};
+      Object.entries(dmd).forEach(([key, procs]) => {
+        const [med, day] = key.split("||");
+        if(!periodOk(day)) return;
+        const filtered = procs.filter(p => fProcs.includes(p.proc) && (unis.length===0||unis.includes(p.un)));
+        if(!filtered.length) return;
+        const val = filtered.reduce((s,p)=>s+p.valor, 0);
+        if(!medMap[med]) medMap[med] = {};
+        medMap[med][day] = (medMap[med][day]||0) + val;
+      });
+      return Object.entries(medMap).map(([name, days]) => ({
+        name,
+        days: Object.entries(days).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,v])=>[d,v]),
+        total: Object.values(days).reduce((s,v)=>s+v,0)
+      })).filter(e=>e.total>0).sort((a,b)=>b.total-a.total);
+    })();
+    const grand = displayEntities.reduce((s,e)=>s+e.total,0)||1, maxEnt = Math.max(1, ...displayEntities.map(e=>e.total));
+    const dmap = {}; displayEntities.forEach(e => e.days.forEach(([d,v]) => { dmap[d]=(dmap[d]||0)+v; }));
+    const daily = Object.keys(dmap).sort().reverse().map(d => [d, dmap[d]]);
+    const maxDay = Math.max(1, ...daily.map(d=>d[1]));
+    const top = displayEntities.slice(0,10);
+    const toggle = n => setOpen(o => ({ ...o, [n]: !o[n] }));
+    const toggleDay = k => setOpenDay(o => ({ ...o, [k]: !o[k] }));
+    return html`<${React.Fragment}>
+      <div class="visual">
+        <div class="visual-h"><i class="ti ti-chart-bar"></i>Ranking — top ${top.length} médicos</div>
+        <${Chartjs} horizontal=${true} labels=${top.map(e=>e.name)} data=${top.map(e=>e.total)} height=${Math.max(150, top.length*34)} />
+      </div>
+      <div class="visual">
+        <div class="visual-h"><i class="ti ti-stethoscope"></i>Médicos — detalhe por dia <small>· ${brl0(grand)}</small></div>
+        <div class="subh">Por dia</div>
+        <table>
+          <thead><tr><th>Dia</th><th class="num">Valor</th><th class="num">% Faturamento</th></tr></thead>
+          <tbody>
+            ${daily.map(d => html`<tr key=${d[0]}>
+              <td>${fmtD(d[0])}</td>
+              <td class="num barcell"><div class="bar" style=${{width:(d[1]/maxDay*100)+"%"}}></div><span>${brl(d[1])}</span></td>
+              <td class="num pct">${pct(d[1]/grand*100)}</td>
+            </tr>`)}
+            <tr class="total"><td>Total</td><td class="num">${brl(grand)}</td><td class="num">100,0%</td></tr>
+          </tbody>
+        </table>
+        <div class="subh">Por médico e dia <small>(clique no médico → clique no dia para ver procedimentos)</small></div>
+        <table>
+          <thead><tr><th>Médico / Dia / Procedimento</th><th class="num">Valor</th><th class="num">% Faturamento</th></tr></thead>
+          <tbody>
+            ${displayEntities.map(e => html`<${React.Fragment} key=${e.name}>
+              <tr class="grp" onClick=${() => toggle(e.name)}>
+                <td><i class=${"ti "+(open[e.name]?"ti-chevron-down":"ti-chevron-right")}></i>${e.name}</td>
+                <td class="num barcell"><div class="bar" style=${{width:(e.total/maxEnt*100)+"%"}}></div><span>${brl(e.total)}</span></td>
+                <td class="num pct">${pct(e.total/grand*100)}</td>
+              </tr>
+              ${open[e.name] ? html`<tr key="__chips_${e.name}"><td colspan="3" style=${{padding:"4px 14px 6px 34px",background:"#fdfaf5",borderBottom:"1px solid #f3eee6"}}>${
+                Object.entries(dmp[e.name]||{}).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([p],i) =>
+                  html`<span key=${i} style=${{display:"inline-block",margin:"2px 3px",padding:"2px 9px",background:"#fdf1e3",color:"#9a5a06",borderRadius:"10px",fontSize:"11px",fontWeight:500}}>${p}</span>`
+                )
+              }</td></tr>` : null}
+              ${open[e.name] ? e.days.map(([d,v]) => {
+                const dk = e.name+"||"+d;
+                const procs = (dmd[dk]||[]).filter(p => unis.length===0||unis.includes(p.un)).sort((a,b)=>b.valor-a.valor);
+                return html`<${React.Fragment} key=${d}>
+                  <tr class="day grp" onClick=${() => toggleDay(dk)}>
+                    <td class="ind"><i class=${"ti "+(openDay[dk]?"ti-chevron-down":"ti-chevron-right")} style=${{fontSize:"12px",marginRight:"4px"}}></i>${fmtD(d)}</td>
+                    <td class="num">${brl(v)}</td>
+                    <td class="num">${pct(v/grand*100)}</td>
+                  </tr>
+                  ${openDay[dk] ? procs.map((p,i) => html`<tr key=${i}>
+                    <td style=${{paddingLeft:"52px",color:"#8a8378",fontSize:"12px",height:"26px"}}>${p.proc}</td>
+                    <td class="num" style=${{fontSize:"12px"}}>${brl(p.valor)}</td>
+                    <td class="num" style=${{fontSize:"12px"}}>${pct(p.valor/grand*100)}</td>
+                  </tr>`) : null}
+                </>`;
+              }) : null}
+            </>`)}
+            <tr class="total"><td>Total geral</td><td class="num">${brl(grand)}</td><td class="num">100,0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </>`;
+  }
+  function PacotesPage({ user, store, unis, pmode, months, de, ate }){
+    const [data, setData] = useState(null);
+    const [fMed, setFMed] = useState("");
+    const [fProc, setFProc] = useState("");
+    const [fPac, setFPac] = useState("");
+    const [open, setOpen] = useState({});
+    useEffect(() => {
+      let cancel = false; setData(null);
+      Promise.all([fetchAll("vw_pacote_solic").catch(() => []), fetchAll("vw_med_proc").catch(() => [])])
+        .then(([ps, mp]) => { if(!cancel) setData({ ps, mp }); });
+      return () => { cancel = true; };
+    }, []);
+    if(!data) return html`<div class="visual"><div class="visual-h"><i class="ti ti-package"></i>Pacotes</div><div style=${{padding:"30px 16px",color:"#8a8378"}}>Carregando…</div></div>`;
+    const uniNames = user.isMaster ? unis.map(i => store.units[i]) : [user.unidade];
+    const inP = d => pmode === "mes" ? months.includes(d.slice(0,7)) : (d >= de && d <= ate);
+    const okUni = un => !user.isMaster || uniNames.length === 0 || uniNames.includes(un);
+    const terms = s => s.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+    const matchAny = (val, ts) => ts.length === 0 || ts.some(t => (val||"").toLowerCase().includes(t));
+    const tMed = terms(fMed), tProc = terms(fProc), tPac = terms(fPac);
+    const psf = data.ps.filter(r => okUni(r.unidade_nome) && inP(r.dia) && matchAny(r.solicitante,tMed) && matchAny(r.procedimento,tProc) && matchAny(r.pacote,tPac));
+    const pacMap = {};
+    psf.forEach(r => { const p = pacMap[r.pacote] = pacMap[r.pacote] || { total:0, solic:{} }; const v = Number(r.valor); p.total += v; p.solic[r.solicitante] = (p.solic[r.solicitante]||0) + v; });
+    const pacotes = Object.entries(pacMap).map(([nome,v]) => ({ nome, total:v.total, solic: Object.entries(v.solic).sort((a,b)=>b[1]-a[1]) })).sort((a,b)=>b.total-a.total);
+    const grandPac = pacotes.reduce((s,p)=>s+p.total,0) || 1;
+    const maxPac = Math.max(1, ...pacotes.map(p=>p.total));
+    const mpf = data.mp.filter(r => okUni(r.unidade_nome) && inP(r.dia) && matchAny(r.medico,tMed) && matchAny(r.procedimento,tProc));
+    const mpMap = {};
+    mpf.forEach(r => { const k = r.medico+"||"+r.procedimento; const o = mpMap[k] = mpMap[k] || { medico:r.medico, proc:r.procedimento, valor:0, qtd:0 }; o.valor += Number(r.valor); o.qtd += Number(r.qtd); });
+    const medproc = Object.values(mpMap).sort((a,b)=>b.valor-a.valor);
+    const mpTotQ = medproc.reduce((s,o)=>s+o.qtd,0), mpTotV = medproc.reduce((s,o)=>s+o.valor,0);
+    const toggle = n => setOpen(o => ({ ...o, [n]: !o[n] }));
+    const field = (lbl, val, set, ph) => html`<div class="fld"><span>${lbl}</span><input class="mfin" value=${val} onChange=${e => set(e.target.value)} placeholder=${ph} /></div>`;
+    return html`<${React.Fragment}>
+      <div class="visual" style=${{padding:"12px 14px",display:"flex",gap:"16px",flexWrap:"wrap",alignItems:"flex-end"}}>
+        ${field("Médico (contém)", fMed, setFMed, "ex.: silvia, ana")}
+        ${field("Procedimento (contém)", fProc, setFProc, "ex.: laser, toxina")}
+        ${field("Pacote (contém)", fPac, setFPac, "ex.: promo")}
+        <div style=${{fontSize:"11px",color:"#a59c8d",paddingBottom:"7px"}}>separe por vírgula p/ vários termos</div>
+      </div>
+      <div class="visual">
+        <div class="visual-h"><i class="ti ti-package"></i>Pacotes — por solicitante <small>· ${pacotes.length} pacote(s) · ${brl0(grandPac)}</small></div>
+        <table>
+          <thead><tr><th>Pacote / Solicitante</th><th class="num">Valor</th><th class="num">%</th></tr></thead>
+          <tbody>
+            ${pacotes.map(p => html`<${React.Fragment} key=${p.nome}>
+              <tr class="grp" onClick=${() => toggle(p.nome)}>
+                <td><i class=${"ti "+(open[p.nome]?"ti-chevron-down":"ti-chevron-right")}></i>${p.nome}</td>
+                <td class="num barcell"><div class="bar" style=${{width:(p.total/maxPac*100)+"%"}}></div><span>${brl(p.total)}</span></td>
+                <td class="num pct">${pct(p.total/grandPac*100)}</td>
+              </tr>
+              ${open[p.nome] ? p.solic.map(([s,val]) => html`<tr class="day" key=${s}><td class="ind">${s}</td><td class="num">${brl(val)}</td><td class="num">${pct(val/grandPac*100)}</td></tr>`) : null}
+            </>`)}
+            <tr class="total"><td>Total geral</td><td class="num">${brl(grandPac)}</td><td class="num">100,0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="visual">
+        <div class="visual-h"><i class="ti ti-stethoscope"></i>Médico × Procedimento <small>· ${medproc.length} linha(s) · ${mpTotQ.toLocaleString("pt-BR")} procedimentos</small></div>
+        <table>
+          <thead><tr><th>Médico</th><th>Procedimento</th><th class="num">Quantidade</th><th class="num">Valor</th></tr></thead>
+          <tbody>
+            ${medproc.slice(0,200).map((o,i) => html`<tr key=${i}><td>${o.medico}</td><td>${o.proc}</td><td class="num">${o.qtd.toLocaleString("pt-BR")}</td><td class="num">${brl(o.valor)}</td></tr>`)}
+            <tr class="total"><td>Total</td><td></td><td class="num">${mpTotQ.toLocaleString("pt-BR")}</td><td class="num">${brl(mpTotV)}</td></tr>
+          </tbody>
+        </table>
+        ${medproc.length>200 ? html`<div style=${{padding:"6px 14px 12px",fontSize:"11px",color:"#a59c8d"}}>Mostrando 200 de ${medproc.length} — use os filtros acima pra refinar.</div>` : null}
+      </div>
+    </>`;
+  }
+  const NOTAS = [
+    { v:"1.6", tag:"Médicos", ico:"ti-search", txt:"Busca por texto no filtro de procedimentos. Digite qualquer parte do nome para encontrar rapidamente." },
+    { v:"1.5", tag:"Médicos", ico:"ti-filter", txt:"Filtro de Procedimento no cabeçalho. Selecione um ou mais procedimentos e veja apenas os médicos que os realizaram." },
+    { v:"1.4", tag:"Procedimentos", ico:"ti-filter", txt:"Filtro de Médico no cabeçalho. Ao selecionar, a lista exibe os procedimentos individuais realizados pelo médico escolhido." },
+    { v:"1.3", tag:"Geral", ico:"ti-building-hospital", txt:"Filtro de Unidade com multi-seleção. É possível combinar mais de uma clínica na mesma visualização." },
+    { v:"1.2", tag:"Destaques", ico:"ti-eye", txt:"Em Médicos, os principais procedimentos do profissional aparecem ao expandir o nome. Em Procedimentos, uma linha discreta lista os médicos ativos no período." },
+    { v:"1.1", tag:"Médicos", ico:"ti-git-branch", txt:"Detalhamento em 3 níveis: clique no médico, depois no dia, para ver cada procedimento realizado com o valor correspondente." },
+    { v:"1.0", tag:"Pacotes", ico:"ti-package", txt:"Aba Pacotes - Detalhado com vendas por solicitante e tabela cruzada de médico por procedimento." },
+  ];
+  function PatchNotes({ onClose }){
+    return html`<div onClick=${onClose} style=${{position:"fixed",inset:0,background:"rgba(20,18,16,.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",backdropFilter:"blur(2px)"}}>
+      <div onClick=${e => e.stopPropagation()} style=${{background:"#fff",borderRadius:"14px",boxShadow:"0 24px 64px rgba(0,0,0,.18)",width:"100%",maxWidth:"480px",maxHeight:"84vh",display:"flex",flexDirection:"column",overflow:"hidden",border:"1px solid #e3ded7"}}>
+        <div style=${{padding:"18px 20px",borderBottom:"1px solid #eee6da",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"12px",flexShrink:0}}>
+          <div style=${{display:"flex",alignItems:"center",gap:"12px"}}>
+            <img src="robozinho.png" alt="bot" style=${{width:"42px",height:"42px",borderRadius:"10px",objectFit:"cover",flexShrink:0,border:"1px solid #eee6da"}} />
+            <div>
+              <div style=${{fontSize:"14.5px",fontWeight:600,color:"#2b2a28",letterSpacing:"-.01em"}}>Registro de Atualizações</div>
+              <div style=${{fontSize:"11.5px",color:"#a59c8d",marginTop:"2px"}}>Aqui estão todas as melhorias do painel</div>
+            </div>
+          </div>
+          <button onClick=${onClose} style=${{background:"none",border:"1px solid #e3ded7",cursor:"pointer",color:"#8a8378",fontSize:"18px",width:"30px",height:"30px",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,lineHeight:1,fontWeight:300,fontFamily:"sans-serif"}}>×</button>
+        </div>
+        <div style=${{overflowY:"auto",flex:1}}>
+          ${NOTAS.map((n,i) => html`<div key=${i} style=${{padding:"14px 20px",borderBottom:"1px solid #f5f1ea",display:"flex",gap:"12px",alignItems:"flex-start"}}>
+            <img src="robozinho.png" alt="bot" style=${{width:"32px",height:"32px",borderRadius:"8px",objectFit:"cover",flexShrink:0,marginTop:"1px",border:"1px solid #eee6da"}} />
+            <div style=${{flex:1,minWidth:0}}>
+              <div style=${{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}>
+                <code style=${{fontSize:"10.5px",fontWeight:700,color:"#E8830F",background:"#fdf1e3",padding:"2px 7px",borderRadius:"5px",fontFamily:"monospace",letterSpacing:".02em"}}>v${n.v}</code>
+                <span style=${{fontSize:"10.5px",fontWeight:600,color:"#a59c8d",textTransform:"uppercase",letterSpacing:".06em"}}>${n.tag}</span>
+              </div>
+              <div style=${{fontSize:"13px",color:"#4a443c",lineHeight:"1.6"}}>${n.txt}</div>
+            </div>
+          </div>`)}
+        </div>
+        <div style=${{padding:"11px 20px",borderTop:"1px solid #eee6da",flexShrink:0,background:"#fcfbf9",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}>
+          <i class="ti ti-sun" style=${{fontSize:"14px",color:"#E8830F"}}></i>
+          <span style=${{fontSize:"12px",color:"#8a8378"}}>Dados atualizados automaticamente todos os dias às 07h00</span>
+        </div>
+      </div>
+    </div>`;
+  }
   function Dashboard({ user, store, onLogout }){
     const [page, setPage] = useState("geral");
-    const [uni, setUni] = useState("");
+    const [showNotes, setShowNotes] = useState(false);
+    const [unis, setUnis] = useState([]);
+    const [fMeds, setFMeds] = useState([]);
+    const [fProcs, setFProcs] = useState([]);
     const [pmode, setPmode] = useState("mes");
     const [months, setMonths] = useState(store.months.map(m => m[0]));
     const [de, setDe] = useState(store.dmin);
     const [ate, setAte] = useState(store.dmax);
     const [kpi, setKpi] = useState(null);
-    const pred = buildPred(uni, pmode, months, de, ate);
+    const pred = buildPred(unis, pmode, months, de, ate);
     const daily = aggDaily(store, pred);
     const med = aggEntity(store.dm, pred);
     const grp = aggEntity(store.dg, pred);
+    const pac = aggEntity(store.dp || {}, pred);
+    const medOpts = [...new Set(Object.keys(store.dmd).map(k => k.split("||")[0]))].sort().map(m => [m, m]);
+    const procOpts = Object.keys(store.dpg||{}).sort().map(p => [p, p]);
+    const periodOk = d => pmode === "mes" ? months.includes(d.slice(0,7)) : (d >= de && d <= ate);
     const ini = (user.isMaster ? "D" : (user.unidade||"U")).replace("Skinlaser - ","").charAt(0).toUpperCase();
     useEffect(() => {
       let cancel = false; setKpi(null);
       const dias = periodDays(pmode, months, de, ate, store.calMin, store.calMax);
-      const p_unidade = user.isMaster ? (uni !== "" ? store.units[Number(uni)] : null) : user.unidade;
+      const p_unidade = user.isMaster ? (unis.length === 1 ? store.units[unis[0]] : null) : user.unidade;
       sb.rpc("analitico_kpis", { p_unidade, p_dias: dias }).then(({ data, error }) => {
         if(cancel) return;
         const r = (!error && data && data[0]) ? data[0] : { valor_final:0, valor:0, qtd:0 };
         setKpi({ vf: Number(r.valor_final), valor: Number(r.valor), qtd: Number(r.qtd), dias: dias.length });
       });
       return () => { cancel = true; };
-    }, [uni, pmode, months.join(","), de, ate]);
+    }, [unis.join(","), pmode, months.join(","), de, ate]);
     const dchart = daily.slice().reverse();
     return html`<div>
+      ${showNotes ? html`<${PatchNotes} onClose=${() => setShowNotes(false)} />` : null}
       <div class="hdr">
         <div class="hdr-l"><img class="logo" src="logo.png" alt="Skin Laser" /><b>Analítico por Unidade Médica e Procedimento</b></div>
-        <div class="hdr-r"><span class="chip"><span class="av">${ini}</span>${user.isMaster ? "diretoria" : user.login}</span><button class="lo" onClick=${onLogout} aria-label="Sair"><i class="ti ti-logout"></i></button></div>
+        <div class="hdr-r"><button class=${"lo"+(showNotes?"":" lo-pulse")} onClick=${() => setShowNotes(true)} aria-label="Novidades" title="Ver novidades"><span class="inbox-ico"></span></button><span class="chip"><span class="av">${ini}</span>${user.isMaster ? "diretoria" : user.login}</span><button class="lo" onClick=${onLogout} aria-label="Sair"><i class="ti ti-logout"></i></button></div>
       </div>
       <div class="body">
         <div class="side">
@@ -374,14 +658,15 @@
           <div class=${"nav"+(page==="geral"?" active":"")} onClick=${() => setPage("geral")}><i class="ti ti-layout-dashboard"></i>Análise Geral</div>
           <div class=${"nav"+(page==="med"?" active":"")} onClick=${() => setPage("med")}><i class="ti ti-stethoscope"></i>Médicos - Detalhado</div>
           <div class=${"nav"+(page==="proc"?" active":"")} onClick=${() => setPage("proc")}><i class="ti ti-clipboard-list"></i>Procedimentos - Detalhado</div>
+          <div class=${"nav"+(page==="pac"?" active":"")} onClick=${() => setPage("pac")}><i class="ti ti-package"></i>Pacotes - Detalhado</div>
         </div>
         <div class="main">
-          <${FilterBar} store=${store} user=${user} uni=${uni} setUni=${setUni} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} />
+          <${FilterBar} store=${store} user=${user} unis=${unis} setUnis=${setUnis} pmode=${pmode} setPmode=${setPmode} months=${months} setMonths=${setMonths} de=${de} setDe=${setDe} ate=${ate} setAte=${setAte} page=${page} fMeds=${fMeds} setFMeds=${setFMeds} medOpts=${medOpts} fProcs=${fProcs} setFProcs=${setFProcs} procOpts=${procOpts} />
           <div class="canvas">
         ${page==="geral" ? html`<${React.Fragment}>
           <${Kpis} kpi=${kpi} />
           <div class="visual">
-            <div class="visual-h"><i class="ti ti-chart-bar"></i>Faturamento por dia</div>
+            <div class="visual-h"><i class="ti ti-chart-bar"></i>Produção por dia (Solicitado)</div>
             <${Chartjs} labels=${dchart.map(r=>ddmm(r[0]))} data=${dchart.map(r=>r[1])} height=${230} />
           </div>
           <div class="grid2">
@@ -390,8 +675,9 @@
           </div>
           <${TotalTable} daily=${daily} />
         </>` : null}
-        ${page==="med" ? html`<${DetailPage} entities=${med} nameHead="Médico" icon="ti-stethoscope" />` : null}
-        ${page==="proc" ? html`<${DetailPage} entities=${grp} nameHead="Procedimento" icon="ti-clipboard-list" />` : null}
+        ${page==="med" ? html`<${MedicosDetailPage} entities=${med} dmd=${store.dmd} dmp=${store.dmp} unis=${unis} fProcs=${fProcs} periodOk=${periodOk} />` : null}
+        ${page==="proc" ? html`<${ProcDetailPage} entities=${grp} dmd=${store.dmd} pred=${pred} fMeds=${fMeds} topMeds=${med} />` : null}
+        ${page==="pac" ? html`<${PacotesPage} user=${user} store=${store} unis=${unis} pmode=${pmode} months=${months} de=${de} ate=${ate} />` : null}
           </div>
         </div>
       </div>
