@@ -573,6 +573,7 @@
       </div>
     </>`;
   }
+  const ROBOT_IMG = new Date() <= new Date("2026-07-19T23:59:59") ? "robobrasil.png" : "robozinho.png";
   const NOTAS = [
     { v:"1.6", tag:"Médicos", ico:"ti-search", txt:"Busca por texto no filtro de procedimentos. Digite qualquer parte do nome para encontrar rapidamente." },
     { v:"1.5", tag:"Médicos", ico:"ti-filter", txt:"Filtro de Procedimento no cabeçalho. Selecione um ou mais procedimentos e veja apenas os médicos que os realizaram." },
@@ -587,7 +588,7 @@
       <div onClick=${e => e.stopPropagation()} style=${{background:"#fff",borderRadius:"14px",boxShadow:"0 24px 64px rgba(0,0,0,.18)",width:"100%",maxWidth:"480px",maxHeight:"84vh",display:"flex",flexDirection:"column",overflow:"hidden",border:"1px solid #e3ded7"}}>
         <div style=${{padding:"18px 20px",borderBottom:"1px solid #eee6da",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"12px",flexShrink:0}}>
           <div style=${{display:"flex",alignItems:"center",gap:"12px"}}>
-            <img src="robozinho.png" alt="bot" style=${{width:"42px",height:"42px",borderRadius:"10px",objectFit:"cover",flexShrink:0,border:"1px solid #eee6da"}} />
+            <img src=${ROBOT_IMG} alt="bot" style=${{width:"42px",height:"42px",borderRadius:"10px",objectFit:"cover",flexShrink:0,border:"1px solid #eee6da"}} />
             <div>
               <div style=${{fontSize:"14.5px",fontWeight:600,color:"#2b2a28",letterSpacing:"-.01em"}}>Registro de Atualizações</div>
               <div style=${{fontSize:"11.5px",color:"#a59c8d",marginTop:"2px"}}>Aqui estão todas as melhorias do painel</div>
@@ -597,7 +598,7 @@
         </div>
         <div style=${{overflowY:"auto",flex:1}}>
           ${NOTAS.map((n,i) => html`<div key=${i} style=${{padding:"14px 20px",borderBottom:"1px solid #f5f1ea",display:"flex",gap:"12px",alignItems:"flex-start"}}>
-            <img src="robozinho.png" alt="bot" style=${{width:"32px",height:"32px",borderRadius:"8px",objectFit:"cover",flexShrink:0,marginTop:"1px",border:"1px solid #eee6da"}} />
+            <img src=${ROBOT_IMG} alt="bot" style=${{width:"32px",height:"32px",borderRadius:"8px",objectFit:"cover",flexShrink:0,marginTop:"1px",border:"1px solid #eee6da"}} />
             <div style=${{flex:1,minWidth:0}}>
               <div style=${{display:"flex",alignItems:"center",gap:"8px",marginBottom:"5px"}}>
                 <code style=${{fontSize:"10.5px",fontWeight:700,color:"#E8830F",background:"#fdf1e3",padding:"2px 7px",borderRadius:"5px",fontFamily:"monospace",letterSpacing:".02em"}}>v${n.v}</code>
