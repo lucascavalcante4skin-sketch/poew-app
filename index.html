@@ -666,7 +666,7 @@
         ${page==="geral" ? html`<${React.Fragment}>
           <${Kpis} kpi=${kpi} />
           <div class="visual">
-            <div class="visual-h"><i class="ti ti-chart-bar"></i>Produção por dia (Solicitado)</div>
+            <div class="visual-h"><i class="ti ti-chart-bar"></i>Propostas executadas por dia</div>
             <${Chartjs} labels=${dchart.map(r=>ddmm(r[0]))} data=${dchart.map(r=>r[1])} height=${230} />
           </div>
           <div class="grid2">
